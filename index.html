@@ -2,17 +2,16 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>家庭冰箱管家-清单修复版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>冰箱管家-iOS优化版</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         @media print { .no-print { display: none !important; } }
-        .recording { animation: pulse 1.5s infinite; color: #ef4444; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        /* 针对 iOS Chrome 的扫码框美化 */
+        #reader { border-radius: 20px; overflow: hidden; }
+        #reader__scan_region video { object-fit: cover !important; }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen text-slate-900 pb-24 font-sans">
@@ -20,197 +19,148 @@
         <header class="flex justify-between items-center py-6 no-print">
             <h1 class="text-2xl font-black text-indigo-600 tracking-tighter uppercase">Our Fridge</h1>
             <div class="flex gap-2">
-                <button onclick="shareInventory()" class="bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl text-xs font-bold shadow-sm">📤 分享</button>
-                <button onclick="startScanner()" class="bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold shadow-sm">📥 同步</button>
+                <button onclick="safeShare()" class="bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl text-xs font-bold active:scale-95 transition">📤 分享</button>
+                <button onclick="safeStartScanner()" class="bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold active:scale-95 transition">📥 同步</button>
             </div>
         </header>
 
-        <div class="bg-white rounded-3xl shadow-xl p-6 mb-6 border border-slate-100 no-print">
-            <div class="space-y-4">
-                <div class="relative">
-                    <input type="text" id="foodName" placeholder="录入食材..." class="w-full bg-slate-50 rounded-xl p-3 pr-12 outline-none text-sm focus:ring-2 focus:ring-indigo-500">
-                    <button onclick="startVoiceRecognition()" class="absolute right-3 top-3" id="micBtn">🎤</button>
-                </div>
-                <select id="foodLocation" class="w-full bg-slate-50 rounded-xl p-3 outline-none text-sm text-slate-500">
-                    <option value="厨房-冷藏">厨房-冷藏</option><option value="厨房-冷冻">厨房-冷冻</option>
-                    <option value="冰柜-1格">冰柜-1格</option><option value="冰柜-2格">冰柜-2格</option>
-                    <option value="冰柜-3格">冰柜-3格</option><option value="冰柜-4格">冰柜-4格</option>
-                </select>
-                <input type="date" id="expiryDate" class="w-full bg-slate-50 rounded-xl p-3 text-sm outline-none">
-                <button onclick="handleSave()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg active:scale-95 transition">存入冰箱</button>
+        <div id="scanner-layer" class="hidden fixed inset-0 bg-black z-50 flex flex-col no-print">
+            <div id="reader" class="flex-1"></div>
+            <div class="p-6 bg-black flex justify-center">
+                <button onclick="safeStopScanner()" class="bg-white text-black px-8 py-3 rounded-full font-bold shadow-xl">退出扫码</button>
             </div>
-        </div>
-
-        <div class="mb-8 bg-white/60 rounded-3xl p-6 no-print border border-slate-100 shadow-sm">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-sm font-black text-indigo-900 uppercase flex items-center gap-2">🛒 待买清单</h2>
-                <button onclick="clearShopping()" class="text-[10px] text-indigo-300">清空已买</button>
-            </div>
-            
-            <div class="flex flex-wrap gap-2 mb-4">
-                <span class="text-[9px] text-slate-300 w-full mb-1 italic">常买:</span>
-                <button onclick="addToShopping('鸡蛋')" class="px-2 py-1 bg-white rounded-lg text-[10px] border shadow-sm">🥚 鸡蛋</button>
-                <button onclick="addToShopping('牛奶')" class="px-2 py-1 bg-white rounded-lg text-[10px] border shadow-sm">🥛 牛奶</button>
-                <button onclick="addToShopping('肉类')" class="px-2 py-1 bg-white rounded-lg text-[10px] border shadow-sm">🥩 肉类</button>
-            </div>
-
-            <ul id="shoppingListContainer" class="space-y-2 border-t pt-3 border-slate-100">
-                </ul>
         </div>
 
         <div id="foodList" class="space-y-6"></div>
 
-        <div class="fixed bottom-4 left-4 right-4 flex gap-2 no-print">
-            <button onclick="exportToExcel()" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl text-xs font-bold">导出 EXCEL</button>
-            <button onclick="window.print()" class="flex-1 bg-rose-600 text-white py-3 rounded-xl text-xs font-bold">PDF/打印</button>
+        <div class="fixed bottom-6 left-4 right-4 bg-white/80 backdrop-blur-md rounded-2xl shadow-2xl p-4 no-print border border-slate-200 z-40 flex gap-2">
+            <input type="text" id="foodName" placeholder="食材..." class="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none">
+            <input type="date" id="expiryDate" class="w-32 bg-white border border-slate-200 rounded-xl px-2 py-2 text-sm outline-none">
+            <button onclick="handleSave()" class="bg-indigo-600 text-white px-5 rounded-xl font-bold text-sm">存入</button>
+        </div>
+
+        <div id="shareModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6 no-print" onclick="this.classList.add('hidden')">
+            <div class="bg-white p-8 rounded-[40px] w-full max-w-xs text-center shadow-2xl" onclick="event.stopPropagation()">
+                <div id="qrcode" class="flex justify-center mb-6"></div>
+                <p class="text-xs text-slate-400 font-bold mb-4 uppercase tracking-widest">让家人扫此码同步</p>
+                <button onclick="document.getElementById('shareModal').classList.add('hidden')" class="w-full py-3 bg-slate-100 rounded-2xl text-slate-600 font-bold text-sm">知道了</button>
+            </div>
         </div>
     </div>
 
     <script>
         let db;
-        // 确保数据库名一致
-        const request = indexedDB.open("FridgeVisualMasterV3", 1);
+        // 升级版本至 V5
+        const request = indexedDB.open("FridgeVisualV5", 1);
         request.onupgradeneeded = e => {
             const d = e.target.result;
             if(!d.objectStoreNames.contains("items")) d.createObjectStore("items", { keyPath: "id", autoIncrement: true });
-            if(!d.objectStoreNames.contains("shopping")) d.createObjectStore("shopping", { keyPath: "id", autoIncrement: true });
         };
-        request.onsuccess = e => { db = e.target.result; renderAll(); };
+        request.onsuccess = e => { db = e.target.result; renderInventory(); };
 
-        function renderAll() {
-            renderInventory();
-            renderShopping();
-        }
-
-        // 渲染待买清单
-        function renderShopping() {
-            const tx = db.transaction("shopping", "readonly");
-            tx.objectStore("shopping").getAll().onsuccess = e => {
-                const list = e.target.result;
-                const container = document.getElementById('shoppingListContainer');
-                if (list.length === 0) {
-                    container.innerHTML = `<li class="text-[10px] text-slate-300 italic text-center py-2">目前没有需要购买的食材</li>`;
-                    return;
-                }
-                container.innerHTML = list.map(i => `
-                    <li class="flex justify-between items-center bg-white p-3 rounded-xl text-xs border border-slate-50 shadow-sm">
-                        <span class="font-bold text-slate-600">${i.name}</span>
-                        <button onclick="delShopping(${i.id})" class="text-indigo-400 font-black">✓</button>
-                    </li>`).join('');
+        // --- 修复：分享逻辑 ---
+        function safeShare() {
+            if (typeof QRCode === "undefined") return alert("正在加载组件，请稍等 2 秒再试...");
+            
+            db.transaction("items", "readonly").objectStore("items").getAll().onsuccess = e => {
+                const data = btoa(encodeURIComponent(JSON.stringify(e.target.result)));
+                const qrDiv = document.getElementById("qrcode");
+                qrDiv.innerHTML = "";
+                
+                try {
+                    new QRCode(qrDiv, {
+                        text: "FRIDGE:" + data,
+                        width: 220,
+                        height: 220,
+                        colorDark : "#4f46e5",
+                        correctLevel : QRCode.CorrectLevel.M
+                    });
+                    document.getElementById("shareModal").classList.remove("hidden");
+                } catch(err) { alert("生成失败，请刷新页面"); }
             };
         }
 
-        function addToShopping(name) {
-            const tx = db.transaction("shopping", "readwrite");
-            tx.objectStore("shopping").add({ name }).onsuccess = () => renderShopping();
+        // --- 修复：同步/相机逻辑 ---
+        let html5QrCode;
+        async function safeStartScanner() {
+            if (typeof Html5Qrcode === "undefined") return alert("扫码组件加载中...");
+
+            const layer = document.getElementById("scanner-layer");
+            layer.classList.remove("hidden");
+
+            html5QrCode = new Html5Qrcode("reader");
+            const config = { fps: 10, qrbox: { width: 280, height: 280 } };
+
+            try {
+                // iPhone Chrome 强制请求后置摄像头
+                await html5QrCode.start(
+                    { facingMode: "environment" }, 
+                    config,
+                    (decodedText) => {
+                        if (decodedText.startsWith("FRIDGE:")) {
+                            const items = JSON.parse(decodeURIComponent(atob(decodedText.replace("FRIDGE:",""))));
+                            const tx = db.transaction("items", "readwrite");
+                            items.forEach(i => { delete i.id; tx.objectStore("items").add(i); });
+                            tx.oncomplete = () => {
+                                safeStopScanner();
+                                renderInventory();
+                                alert("同步成功！");
+                            };
+                        }
+                    }
+                );
+            } catch (err) {
+                layer.classList.add("hidden");
+                alert("无法访问相机。请检查：\n1. 网址是否为 https\n2. iOS设置 > Chrome > 开启摄像头权限");
+            }
         }
 
-        function delShopping(id) {
-            db.transaction("shopping", "readwrite").objectStore("shopping").delete(id).oncomplete = renderShopping;
+        function safeStopScanner() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then(() => {
+                    document.getElementById("scanner-layer").classList.add("hidden");
+                    html5QrCode.clear();
+                }).catch(() => {
+                    document.getElementById("scanner-layer").classList.add("hidden");
+                });
+            } else {
+                document.getElementById("scanner-layer").classList.add("hidden");
+            }
         }
 
-        function clearShopping() {
-            db.transaction("shopping", "readwrite").objectStore("shopping").clear().oncomplete = renderShopping;
-        }
-
-        // 存入冰箱逻辑
+        // --- 核心保存与渲染 ---
         function handleSave() {
             const name = document.getElementById('foodName').value.trim();
             const date = document.getElementById('expiryDate').value;
-            const loc = document.getElementById('foodLocation').value;
-            if(!name || !date) return alert("请填写完整");
-            db.transaction("items", "readwrite").objectStore("items").add({name, date, loc}).onsuccess = () => {
+            if(!name || !date) return alert("请完整录入");
+            db.transaction("items", "readwrite").objectStore("items").add({name, date, loc: "厨房-冷藏"}).onsuccess = () => {
                 document.getElementById('foodName').value = "";
-                renderAll();
+                renderInventory();
             };
         }
 
-        // 渲染库存 (包含红黄绿预警)
         function renderInventory() {
             db.transaction("items", "readonly").objectStore("items").getAll().onsuccess = e => {
                 const items = e.target.result;
-                const groups = items.reduce((acc, i) => { (acc[i.loc] = acc[i.loc] || []).push(i); return acc; }, {});
-                document.getElementById('foodList').innerHTML = Object.keys(groups).map(loc => `
-                    <div>
-                        <h3 class="text-[10px] font-black text-slate-400 mb-2 uppercase tracking-widest pl-1">${loc}</h3>
-                        <div class="space-y-2">
-                            ${groups[loc].sort((a,b)=>new Date(a.date)-new Date(b.date)).map(i => {
-                                const diff = Math.ceil((new Date(i.date)-new Date())/86400000);
-                                let cardStyle = "bg-white border-slate-100";
-                                let tagStyle = "bg-emerald-50 text-emerald-500";
-                                let status = `余 ${diff} 天`;
-                                if (diff <= 0) { cardStyle = "bg-red-50 border-red-100"; tagStyle = "bg-red-500 text-white"; status = "已过期"; }
-                                else if (diff <= 3) { cardStyle = "bg-amber-50 border-amber-100"; tagStyle = "bg-amber-500 text-white"; status = "快吃!"; }
-
-                                return `<div class="${cardStyle} p-4 rounded-2xl flex justify-between items-center shadow-sm border">
-                                    <div><div class="font-bold text-slate-700">${i.name}</div><div class="text-[10px] text-slate-400">${i.date}</div></div>
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-[9px] px-2 py-1 rounded-lg ${tagStyle} font-bold">${status}</span>
-                                        <button onclick="addToShopping('${i.name}')" class="opacity-30 hover:opacity-100 transition">🛒</button>
-                                        <button onclick="delInventoryItem(${i.id},'${i.name}')" class="text-slate-200 hover:text-red-400 transition">✕</button>
-                                    </div>
-                                </div>`}).join('')}
-                        </div>
-                    </div>`).join('');
+                const container = document.getElementById('foodList');
+                container.innerHTML = items.length === 0 ? `<div class="text-center text-slate-300 text-xs py-20 uppercase font-black tracking-widest">Fridge Empty</div>` :
+                    items.sort((a,b)=>new Date(a.date)-new Date(b.date)).map(i => {
+                        const diff = Math.ceil((new Date(i.date)-new Date())/86400000);
+                        let style = diff <= 0 ? "bg-rose-50 border-rose-100" : diff <= 3 ? "bg-amber-50 border-amber-100" : "bg-white";
+                        let tag = diff <= 0 ? "已过期" : diff <= 3 ? "快吃!" : `余 ${diff} 天`;
+                        let tagStyle = diff <= 0 ? "bg-rose-500 text-white" : diff <= 3 ? "bg-amber-500 text-white" : "bg-emerald-100 text-emerald-600";
+                        
+                        return `<div class="${style} p-5 rounded-[2rem] flex justify-between items-center shadow-sm border mb-3">
+                            <div><div class="font-black text-slate-800 text-base">${i.name}</div><div class="text-[10px] text-slate-400 font-mono">${i.date}</div></div>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[9px] px-2 py-1 rounded-lg ${tagStyle} font-black uppercase">${tag}</span>
+                                <button onclick="delItem(${i.id})" class="text-slate-200 px-2">✕</button>
+                            </div>
+                        </div>`}).join('');
             };
         }
 
-        function delInventoryItem(id, name) {
-            if (confirm(`吃完 "${name}" 了？自动加入待买清单吗？`)) addToShopping(name);
-            db.transaction("items", "readwrite").objectStore("items").delete(id).oncomplete = renderAll;
-        }
-
-        // 分享、OCR、语音等辅助功能沿用之前的稳定代码...
-        function startVoiceRecognition() {
-            const sr = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if(!sr) return alert("浏览器不支持语音");
-            const rec = new sr(); rec.lang = 'zh-CN';
-            rec.onstart = () => document.getElementById('micBtn').classList.add('recording');
-            rec.onresult = e => document.getElementById('foodName').value = e.results[0][0].transcript;
-            rec.onend = () => document.getElementById('micBtn').classList.remove('recording');
-            rec.start();
-        }
-
-        async function handleOcr(e) {
-            const f = e.target.files[0]; if(!f) return;
-            const w = await Tesseract.createWorker('eng');
-            const { data: { text } } = await w.recognize(f);
-            await w.terminate();
-            const m = text.match(/(\d{4})[./-]\s?(\d{1,2})[./-]\s?(\d{1,2})/);
-            if(m) document.getElementById('expiryDate').value = `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
-        }
-
-        function exportToExcel() {
-            db.transaction("items", "readonly").objectStore("items").getAll().onsuccess = e => {
-                const ws = XLSX.utils.json_to_sheet(e.target.result.map(i => ({"食材":i.name, "到期":i.date, "位置":i.loc})));
-                const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "库存");
-                XLSX.writeFile(wb, `冰箱盘点.xlsx`);
-            };
-        }
-
-        function shareInventory() {
-            db.transaction("items", "readonly").objectStore("items").getAll().onsuccess = e => {
-                const data = btoa(encodeURIComponent(JSON.stringify(e.target.result)));
-                document.getElementById("qrcode").innerHTML = "";
-                new QRCode(document.getElementById("qrcode"), { text: "FRIDGE:" + data, width: 200, height: 200 });
-                document.getElementById("shareModal").classList.remove("hidden");
-            };
-        }
-
-        let scanner;
-        function startScanner() {
-            document.getElementById("reader-container").classList.remove("hidden");
-            scanner = new Html5Qrcode("reader");
-            scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (txt) => {
-                if(txt.startsWith("FRIDGE:")){
-                    const items = JSON.parse(decodeURIComponent(atob(txt.replace("FRIDGE:",""))));
-                    const tx = db.transaction("items", "readwrite");
-                    items.forEach(i => { delete i.id; tx.objectStore("items").add(i); });
-                    tx.oncomplete = () => { stopScanner(); renderAll(); alert("同步完成"); };
-                }
-            });
-        }
-        function stopScanner() { if(scanner) scanner.stop().then(()=>document.getElementById("reader-container").classList.add("hidden")); }
+        function delItem(id) { db.transaction("items", "readwrite").objectStore("items").delete(id).oncomplete = renderInventory; }
     </script>
 </body>
 </html>
