@@ -3,137 +3,174 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>家庭冰箱管家-修复版</title>
+    <title>家庭冰箱管家 Pro Max</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
-        .no-print { display: block; }
-        @media print { 
-            .no-print { display: none !important; } 
-            .print-only { display: block !important; }
-        }
-        .loading-spinner { border: 3px solid #f3f3f3; border-top: 3px solid #6366f1; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; display: inline-block; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @media print { .no-print { display: none !important; } }
+        .recording { animation: pulse 1.5s infinite; color: #ef4444; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen text-slate-900 pb-24">
+<body class="bg-slate-50 min-h-screen text-slate-900 pb-24 font-sans">
     <div class="max-w-md mx-auto p-4">
         <header class="flex justify-between items-center py-6 no-print">
-            <h1 class="text-2xl font-black text-indigo-600 tracking-tighter uppercase">Our Fridge</h1>
+            <div>
+                <h1 class="text-2xl font-black text-indigo-600 tracking-tighter uppercase">Our Fridge</h1>
+                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Visual Management Pro</p>
+            </div>
             <div class="flex gap-2">
-                <button onclick="shareInventory()" class="bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl text-xs font-bold">📤 分享</button>
-                <button onclick="startScanner()" class="bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold">📥 同步</button>
+                <button onclick="shareInventory()" class="bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl text-xs font-bold shadow-sm">📤 分享</button>
+                <button onclick="startScanner()" class="bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold shadow-sm">📥 同步</button>
             </div>
         </header>
 
-        <div id="reader-container" class="hidden fixed inset-0 bg-black z-50 flex flex-col no-print">
-            <div id="reader" class="flex-1"></div>
-            <button onclick="stopScanner()" class="py-6 bg-white font-bold text-red-500">关闭扫描</button>
-        </div>
-
         <div class="bg-white rounded-3xl shadow-xl p-6 mb-6 border border-slate-100 no-print">
             <div class="space-y-4">
-                <input type="text" id="foodName" placeholder="食材名称..." class="w-full bg-slate-50 rounded-xl p-3 outline-none text-sm">
+                <div class="relative">
+                    <input type="text" id="foodName" placeholder="录入食材..." class="w-full bg-slate-50 rounded-xl p-3 pr-12 outline-none text-sm focus:ring-2 focus:ring-indigo-500">
+                    <button onclick="startVoiceRecognition()" class="absolute right-3 top-3" id="micBtn">🎤</button>
+                </div>
                 <select id="foodLocation" class="w-full bg-slate-50 rounded-xl p-3 outline-none text-sm text-slate-500">
-                    <option value="厨房-冷藏">厨房-冷藏</option><option value="厨房-冷冻">厨房-冷冻</option>
-                    <option value="冰柜-1格">冰柜-1格</option><option value="冰柜-2格">冰柜-2格</option>
-                    <option value="冰柜-3格">冰柜-3格</option><option value="冰柜-4格">冰柜-4格</option>
+                    <optgroup label="1. 厨房冰箱"><option value="厨房-冷藏">厨房-冷藏</option><option value="厨房-冷冻">厨房-冷冻</option></optgroup>
+                    <optgroup label="2. 冰柜"><option value="冰柜-1格">冰柜-1格</option><option value="冰柜-2格">冰柜-2格</option><option value="冰柜-3格">冰柜-3格</option><option value="冰柜-4格">冰柜-4格</option></optgroup>
                 </select>
-                <input type="date" id="expiryDate" class="w-full bg-slate-50 rounded-xl p-3 text-sm">
-                <button onclick="handleSave()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black">存入冰箱</button>
+                <div class="flex gap-2">
+                    <input type="date" id="expiryDate" class="flex-1 bg-slate-50 rounded-xl p-3 text-sm outline-none">
+                    <button onclick="document.getElementById('cameraInput').click()" class="bg-slate-100 p-3 rounded-xl">📷</button>
+                    <input type="file" id="cameraInput" accept="image/*" capture="camera" class="hidden" onchange="handleOcr(event)">
+                </div>
+                <button onclick="handleSave()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg active:scale-95 transition">存入冰箱</button>
             </div>
         </div>
 
-        <div class="mb-8 bg-indigo-50 rounded-3xl p-6 no-print">
-            <h2 class="text-sm font-black text-indigo-900 mb-4">🛒 购物清单</h2>
+        <div class="mb-8 bg-indigo-50 rounded-3xl p-6 no-print border border-indigo-100 shadow-inner">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-sm font-black text-indigo-900 uppercase tracking-tighter flex items-center gap-2">🛒 待买清单</h2>
+                <button onclick="clearShopping()" class="text-[10px] text-indigo-400">清空已买</button>
+            </div>
             <ul id="shoppingList" class="space-y-2 mb-4"></ul>
-            <button onclick="clearShopping()" class="w-full py-2 border-2 border-dashed border-indigo-200 text-indigo-400 text-[10px] rounded-xl">清空已买项</button>
+            <div class="flex flex-wrap gap-2 pt-2 border-t border-indigo-100">
+                <span class="text-[9px] text-indigo-300 w-full">常买：</span>
+                <button onclick="addToShopping('鸡蛋')" class="px-2 py-1 bg-white rounded-lg text-[10px] text-indigo-600 shadow-sm border border-indigo-100">🥚 鸡蛋</button>
+                <button onclick="addToShopping('牛奶')" class="px-2 py-1 bg-white rounded-lg text-[10px] text-indigo-600 shadow-sm border border-indigo-100">🥛 牛奶</button>
+                <button onclick="addToShopping('肉类')" class="px-2 py-1 bg-white rounded-lg text-[10px] text-indigo-600 shadow-sm border border-indigo-100">🥩 肉类</button>
+            </div>
         </div>
 
         <div id="foodList" class="space-y-6"></div>
 
         <div class="fixed bottom-4 left-4 right-4 flex gap-2 no-print">
-            <button onclick="exportToExcel()" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl text-xs font-bold">导出 EXCEL</button>
-            <button onclick="window.print()" class="flex-1 bg-rose-600 text-white py-3 rounded-xl text-xs font-bold">保存 PDF/打印</button>
+            <button onclick="exportToExcel()" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl text-xs font-bold shadow-lg">导出 EXCEL</button>
+            <button onclick="window.print()" class="flex-1 bg-rose-600 text-white py-3 rounded-xl text-xs font-bold shadow-lg">PDF/打印</button>
         </div>
 
         <div id="shareModal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-6 no-print">
-            <div class="bg-white p-6 rounded-3xl w-full max-w-xs text-center">
+            <div class="bg-white p-6 rounded-3xl w-full max-w-xs text-center shadow-2xl">
                 <div id="qrcode" class="flex justify-center mb-4"></div>
-                <button onclick="document.getElementById('shareModal').classList.add('hidden')" class="text-slate-400 text-sm">关闭</button>
+                <button onclick="document.getElementById('shareModal').classList.add('hidden')" class="text-slate-400 text-sm font-bold">关闭</button>
             </div>
+        </div>
+        <div id="reader-container" class="hidden fixed inset-0 bg-black z-50 flex flex-col no-print">
+            <div id="reader" class="flex-1"></div>
+            <button onclick="stopScanner()" class="py-6 bg-white font-bold text-red-500">退出扫码</button>
         </div>
     </div>
 
     <script>
         let db;
-        const dbReq = indexedDB.open("FridgeMasterFix", 1);
-        dbReq.onupgradeneeded = e => {
-            let d = e.target.result;
-            if(!d.objectStoreNames.contains("items")) d.createObjectStore("items", { keyPath: "id", autoIncrement: true });
-            if(!d.objectStoreNames.contains("shopping")) d.createObjectStore("shopping", { keyPath: "id", autoIncrement: true });
+        const request = indexedDB.open("FridgeVisualMaster", 1);
+        request.onupgradeneeded = e => {
+            const d = e.target.result;
+            d.createObjectStore("items", { keyPath: "id", autoIncrement: true });
+            d.createObjectStore("shopping", { keyPath: "id", autoIncrement: true });
         };
-        dbReq.onsuccess = e => { db = e.target.result; renderAll(); };
+        request.onsuccess = e => { db = e.target.result; renderAll(); };
+
+        function handleSave() {
+            const name = document.getElementById('foodName').value.trim();
+            const date = document.getElementById('expiryDate').value;
+            const loc = document.getElementById('foodLocation').value;
+            if(!name || !date) return alert("请填写食材和日期");
+            const tx = db.transaction("items", "readwrite");
+            tx.objectStore("items").add({name, date, loc}).onsuccess = () => {
+                document.getElementById('foodName').value = "";
+                renderAll();
+            };
+        }
 
         function renderAll() {
-            // 渲染购物清单
-            db.transaction("shopping", "readonly").objectStore("shopping").getAll().onsuccess = e => {
-                const list = e.target.result;
-                document.getElementById('shoppingList').innerHTML = list.map(i => `
-                    <li class="flex justify-between items-center bg-white/60 p-3 rounded-xl text-xs">
-                        <span>${i.name}</span>
-                        <button onclick="delShopping(${i.id})" class="text-indigo-400">✓</button>
-                    </li>`).join('');
-            };
-            // 渲染库存
+            renderInventory();
+            renderShopping();
+        }
+
+        function renderInventory() {
             db.transaction("items", "readonly").objectStore("items").getAll().onsuccess = e => {
-                const groups = e.target.result.reduce((acc, i) => { (acc[i.loc] = acc[i.loc] || []).push(i); return acc; }, {});
+                const items = e.target.result;
+                const groups = items.reduce((acc, i) => { (acc[i.loc] = acc[i.loc] || []).push(i); return acc; }, {});
+                
                 document.getElementById('foodList').innerHTML = Object.keys(groups).map(loc => `
-                    <div class="mb-4">
-                        <h3 class="text-[10px] font-black text-slate-400 mb-2 uppercase">${loc}</h3>
-                        ${groups[loc].map(i => `<div class="bg-white p-4 rounded-2xl flex justify-between border mb-2 shadow-sm text-sm font-bold">
-                            <span>${i.name} (${i.date})</span>
-                            <button onclick="delItem(${i.id})" class="text-slate-300">✕</button>
-                        </div>`).join('')}
+                    <div>
+                        <h3 class="text-[10px] font-black text-slate-400 mb-2 uppercase tracking-widest pl-1">${loc}</h3>
+                        <div class="space-y-2">
+                            ${groups[loc].sort((a,b)=>new Date(a.date)-new Date(b.date)).map(i => {
+                                const diff = Math.ceil((new Date(i.date)-new Date())/86400000);
+                                let cardStyle = "bg-white border-slate-100";
+                                let tagStyle = "bg-emerald-100 text-emerald-600";
+                                let status = `余 ${diff} 天`;
+
+                                if (diff <= 0) {
+                                    cardStyle = "bg-red-50 border-red-200";
+                                    tagStyle = "bg-red-600 text-white font-bold";
+                                    status = "已过期";
+                                } else if (diff <= 3) {
+                                    cardStyle = "bg-amber-50 border-amber-200";
+                                    tagStyle = "bg-amber-500 text-white font-bold";
+                                    status = "快吃!";
+                                }
+
+                                return `<div class="${cardStyle} p-4 rounded-2xl flex justify-between items-center shadow-sm border transition-all duration-300">
+                                    <div><div class="font-bold text-slate-700">${i.name}</div><div class="text-[10px] text-slate-400 font-mono">${i.date}</div></div>
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-[9px] px-2 py-1 rounded-lg ${tagStyle}">${status}</span>
+                                        <button onclick="addToShopping('${i.name}')" title="加入清单">🛒</button>
+                                        <button onclick="delItem(${i.id}, '${i.name}')" class="text-slate-200 hover:text-red-400 transition">✕</button>
+                                    </div>
+                                </div>`}).join('')}
+                        </div>
                     </div>`).join('');
             };
         }
 
-        // 修复：清空购物清单并刷新
-        function clearShopping() {
-            const tx = db.transaction("shopping", "readwrite");
-            tx.objectStore("shopping").clear();
-            tx.oncomplete = () => renderAll(); // 关键：确保清空后立即刷新界面
-        }
-
-        function delShopping(id) { db.transaction("shopping", "readwrite").objectStore("shopping").delete(id).oncomplete = renderAll; }
-        
-        function handleSave() {
-            const name = document.getElementById('foodName').value;
-            const date = document.getElementById('expiryDate').value;
-            const loc = document.getElementById('foodLocation').value;
-            if(!name || !date) return alert("请补全信息");
-            db.transaction("items", "readwrite").objectStore("items").add({name, date, loc}).oncomplete = renderAll;
-        }
-
-        function delItem(id) { db.transaction("items", "readwrite").objectStore("items").delete(id).oncomplete = renderAll; }
-
-        // 修复：PDF 乱码解决办法 -> 调用系统打印存为 PDF
-        // 在手机上点击“保存 PDF”后，选择“打印”，在预览页双指放大或选择“存为 PDF”即可，这样完美支持中文。
-
-        function exportToExcel() {
-            const tx = db.transaction("items", "readonly");
-            tx.objectStore("items").getAll().onsuccess = e => {
-                const ws = XLSX.utils.json_to_sheet(e.target.result.map(i => ({"食材":i.name, "到期":i.date, "位置":i.loc})));
-                const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "库存");
-                XLSX.writeFile(wb, `冰箱清单.xlsx`);
+        function renderShopping() {
+            db.transaction("shopping", "readonly").objectStore("shopping").getAll().onsuccess = e => {
+                document.getElementById('shoppingList').innerHTML = e.target.result.map(i => `
+                    <li class="flex justify-between items-center bg-white/60 p-3 rounded-xl text-xs mb-1 border border-indigo-100/50 shadow-sm">
+                        <span class="font-medium text-indigo-700">${i.name}</span>
+                        <button onclick="delShopping(${id=i.id})" class="text-indigo-400 font-black">✓</button>
+                    </li>`).join('');
             };
         }
 
-        // 分享 & 同步
+        function delItem(id, name) {
+            if (confirm(`吃完 "${name}" 了？要加入购物清单吗？`)) addToShopping(name);
+            db.transaction("items", "readwrite").objectStore("items").delete(id).oncomplete = renderAll;
+        }
+        function addToShopping(name) { db.transaction("shopping", "readwrite").objectStore("shopping").add({name}).oncomplete = renderAll; }
+        function delShopping(id) { db.transaction("shopping", "readwrite").objectStore("shopping").delete(id).oncomplete = renderAll; }
+        function clearShopping() { const tx = db.transaction("shopping", "readwrite"); tx.objectStore("shopping").clear(); tx.oncomplete = renderAll; }
+
+        function exportToExcel() {
+            db.transaction("items", "readonly").objectStore("items").getAll().onsuccess = e => {
+                const ws = XLSX.utils.json_to_sheet(e.target.result.map(i => ({"食材":i.name, "到期":i.date, "位置":i.loc})));
+                const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "库存清单");
+                XLSX.writeFile(wb, `冰箱盘点_${new Date().toLocaleDateString()}.xlsx`);
+            };
+        }
+
         function shareInventory() {
             db.transaction("items", "readonly").objectStore("items").getAll().onsuccess = e => {
                 const data = btoa(encodeURIComponent(JSON.stringify(e.target.result)));
@@ -152,11 +189,30 @@
                     const items = JSON.parse(decodeURIComponent(atob(txt.replace("FRIDGE:",""))));
                     const tx = db.transaction("items", "readwrite");
                     items.forEach(i => { delete i.id; tx.objectStore("items").add(i); });
-                    tx.oncomplete = () => { stopScanner(); renderAll(); alert("同步成功"); };
+                    tx.oncomplete = () => { stopScanner(); renderAll(); alert("数据同步完成！"); };
                 }
-            }).catch(err => alert("相机开启失败，请检查浏览器权限：" + err));
+            }).catch(e => alert("相机错误：请确保在 HTTPS 链接下访问并授予相机权限"));
         }
         function stopScanner() { if(scanner) scanner.stop().then(()=>document.getElementById("reader-container").classList.add("hidden")); }
+
+        function startVoiceRecognition() {
+            const sr = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if(!sr) return alert("浏览器不支持语音");
+            const rec = new sr(); rec.lang = 'zh-CN';
+            rec.onstart = () => document.getElementById('micBtn').classList.add('recording');
+            rec.onresult = e => document.getElementById('foodName').value = e.results[0][0].transcript;
+            rec.onend = () => document.getElementById('micBtn').classList.remove('recording');
+            rec.start();
+        }
+
+        async function handleOcr(e) {
+            const f = e.target.files[0]; if(!f) return;
+            const w = await Tesseract.createWorker('eng');
+            const { data: { text } } = await w.recognize(f);
+            await w.terminate();
+            const m = text.match(/(\d{4})[./-]\s?(\d{1,2})[./-]\s?(\d{1,2})/);
+            if(m) document.getElementById('expiryDate').value = `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+        }
     </script>
 </body>
 </html>
